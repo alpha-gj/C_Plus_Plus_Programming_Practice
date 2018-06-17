@@ -1,8 +1,30 @@
 #include<stdlib.h>
 #include<stdio.h>
-#include"CExample.h"
 
 using namespace std;
+
+
+class CExample {
+
+	public:
+		CExample(int paramter):val(paramter)
+		{
+
+		}
+		~CExample() 
+		{
+
+		}
+		void Show();
+
+	private:
+		int val;
+};
+
+void CExample::Show()
+{
+	printf("val is %d\n", val);
+}
 
 int main(void)
 {

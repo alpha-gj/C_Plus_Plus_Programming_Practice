@@ -1,7 +1,7 @@
 DAEMON = shallow_copy
 TARGETS = $(DAEMON)
 
-SRCS = $(DAEMON).cpp CExample.cpp
+SRCS = $(DAEMON).cpp 
 
 CC = g++ -g
 
@@ -22,5 +22,5 @@ install: all
 DEPENDS := $(SRCS:%.c=%.d)
 DEPENDS := $(DEPENDS:%.cpp=%.d)
 
-$(DAEMON): $(DAEMON).o CExample.o
+$(DAEMON): $(DAEMON).o 
 
