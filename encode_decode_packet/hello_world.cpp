@@ -26,21 +26,6 @@ typedef struct {
 	char payload_context[PAYLOAD_SIZE];
 } MCU_SUB_PACKET;
 
-
-
-MCU_SUB_PACKET init_mcu_sub_packet(unsigned char arg_data_type, char arg_content[]) 
-{
-	MCU_SUB_PACKET mcu_sub_packet = {0};
-
-	/* Create */
-	mcu_sub_packet.data_type = arg_data_type;
-	mcu_sub_packet.payload_len = strlen(arg_content);
-	strncpy(mcu_sub_packet.payload_context, arg_content, PAYLOAD_SIZE);
-	mcu_sub_packet.payload_context[mcu_sub_packet.payload_len] = '\0';
-
-	return mcu_sub_packet;
-}
-
 int decodeMcuPacket(char *mcu_packet) 
 {
 	char out_buffer[128] = {0};
@@ -64,8 +49,6 @@ int decodeMcuPacket(char *mcu_packet)
 				out_buffer[sub_mcu_packet_payload_len] = '\0';
 				printf("MCU_DATA_FW_VER is %s\n", out_buffer);
 				printf("read_count is %d\n", read_count);
-				
-
 				break;
 			case MCU_DATA_CAM_NAME:
 				printf("case: MCU_DATA_CAM_NAME\n");
@@ -105,7 +88,6 @@ int decodeMcuPacket(char *mcu_packet)
 	return 0;
 }
 
-/* TODO Check MCU PAKCET SIZE shoud not more than 120 bytes */
 /*  ENCODE */
 int encodeToMcuPacket(vector<MCU_SUB_PACKET> vectorMcuPacket, char mcu_packet[])
 {
@@ -118,34 +100,58 @@ int encodeToMcuPacket(vector<MCU_SUB_PACKET> vectorMcuPacket, char mcu_packet[])
 //		printf("vectorMcuPacket[%d].payload_len is %d\n", i, vectorMcuPacket.at(i).payload_len);
 //		printf("vectorMcuPacket[%d].payload_context is %s\n", i, vectorMcuPacket.at(i).payload_context);
 
+		/* Add data type */
 		memcpy(sub_mcu_packet_buffer_iter,
 				(const char*)&vectorMcuPacket.at(i).data_type,
 				sizeof(vectorMcuPacket.at(i).data_type));
 		sub_mcu_packet_buffer_iter = sub_mcu_packet_buffer_iter + sizeof(vectorMcuPacket.at(i).data_type);
 
+		/* Add payload len */
 		memcpy(sub_mcu_packet_buffer_iter, 
 				(const char*)&vectorMcuPacket.at(i).payload_len,
 				sizeof(vectorMcuPacket.at(i).payload_len));
 		sub_mcu_packet_buffer_iter = sub_mcu_packet_buffer_iter + sizeof(vectorMcuPacket.at(i).payload_len);
 
+		/* Add payload context */
 		memcpy(sub_mcu_packet_buffer_iter,
 			(const char*)&vectorMcuPacket.at(i).payload_context, 
 			strlen((const char*)&vectorMcuPacket.at(i).payload_context));
 		sub_mcu_packet_buffer_iter = sub_mcu_packet_buffer_iter + strlen((const char*)&vectorMcuPacket.at(i).payload_context);
 	}
 
-	printf("count is %d\n", (sub_mcu_packet_buffer_iter - &mcu_packet[HEAD_BYTE_NUMS]));
-	*mcu_packet_header_buffer_iter = HEAD_BYTE_NUMS + sub_mcu_packet_buffer_iter - &mcu_packet[HEAD_BYTE_NUMS];
-	printf("mcu_payload is %d\n", mcu_packet[0]);
-	return 0;
+	/* Cal the total len of sub mcu packets */
+	int total_sub_mcu_packet_len = sub_mcu_packet_buffer_iter - &mcu_packet[HEAD_BYTE_NUMS];
+
+	/* Set the mcu_packet len to header location of mcu packet */
+	*mcu_packet_header_buffer_iter = HEAD_BYTE_NUMS + total_sub_mcu_packet_len;
+	
+	fprintf(stderr, "MCU packet len is %d, include %d byte of header and %d byte of payload (all sub mcu packet len)\n",
+			mcu_packet[0], 
+			HEAD_BYTE_NUMS, 
+			total_sub_mcu_packet_len);
+
+	/* Check the mcu packet size */
+	if (mcu_packet[0] > MCU_PACKET_SIZE) {
+		fprintf(stderr, "MCU packet size is too big!\n");
+		return -1;
+	} else {
+		fprintf(stderr, "MCU packet size is ok!\n");
+		return 0;
+	}
 }
 
+MCU_SUB_PACKET init_mcu_sub_packet(unsigned char arg_data_type, char arg_content[]) 
+{
+	MCU_SUB_PACKET mcu_sub_packet = {0};
 
+	/* Create */
+	mcu_sub_packet.data_type = arg_data_type;
+	mcu_sub_packet.payload_len = strlen(arg_content);
+	strncpy(mcu_sub_packet.payload_context, arg_content, PAYLOAD_SIZE);
+	mcu_sub_packet.payload_context[mcu_sub_packet.payload_len] = '\0';
 
-
-/* OUTCODE */
-
-
+	return mcu_sub_packet;
+}
 
 int main(void)
 {
