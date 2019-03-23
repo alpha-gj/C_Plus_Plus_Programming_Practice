@@ -8,15 +8,16 @@
 //u
 #define RF868_MAX_PAYLOAD 20
 
-/* CUSTOM STRUCT */
-//typedef enum {
+/* CUSTOM STRUCT */ //typedef enum {
 //    UNKNOWN,
 //    LED,
 //    BUTTON,
 //} HW_TYPE;
 //
-#define LED_TYPE    0
-#define BUTTON_TYPE 1
+//
+#define UNKNOWN_HW_TYPE     0
+#define LED_TYPE            1
+#define BUTTON_TYPE         2
 
 typedef struct {
     int array[RF868_MAX_PAYLOAD*3];
@@ -70,14 +71,19 @@ int main(int /*argc*/ , char * /*args*/[])
     /* STEP2. Setup Payload: hw type, buf */
     RF868_CUSTOM_PAYLOAD payload;
     memcpy((char *)payload.buf, (const char*)&button_ctrl, sizeof(button_ctrl)); 
+    printf("sizeof(button_ctrl): %d\n", sizeof(button_ctrl));
 
+    for (int i = 0; i < sizeof(button_ctrl); i++) {
+        printf("payload.buf[%d]: %d\n", i, payload.buf[i]);
+    }
+    
     /* STEP3. Encode the RF868 PACKET */
     printf ("RF868_MAX_PAYLOAD: %d\n", RF868_MAX_PAYLOAD);
 
     RF868_CUSTOM_HEADER header {
         .device_id = 1,
         .seq_num = 0,
-        .hw_type= BUTTON_TYPE,
+        .hw_type= UNKNOWN_HW_TYPE,
         .packet_completed_status = PACKET_NOT_COMPLETED,
         .payload_size = 0,
     };
@@ -95,7 +101,7 @@ int main(int /*argc*/ , char * /*args*/[])
     char tx_buffer[1024] = {};
     char *tx_buffer_iter = tx_buffer;
     const char *header_iter = (const char *)&header;
-    const char *pre_mcu_payload_iter = (const char*)&payload.buf;
+    const char *pre_mcu_payload_iter = (const char *)payload.buf;
     int mcu_packet_len = 0; /* multi (len of sub_mcu_header + len sub_mcu_payload) */
     int sub_mcu_payload_size = RF868_MAX_PAYLOAD - sizeof(RF868_CUSTOM_HEADER);
     int to_be_processed_count = pre_mcu_payload_size;
@@ -104,6 +110,7 @@ int main(int /*argc*/ , char * /*args*/[])
     printf("to_be_processed_count: %d\n", to_be_processed_count);
 
     do {
+        printf("\n");
         if (to_be_processed_count > sub_mcu_payload_size)  {
 
             header.packet_completed_status = PACKET_NOT_COMPLETED;
@@ -112,28 +119,28 @@ int main(int /*argc*/ , char * /*args*/[])
         } else {
 
             header.packet_completed_status = PACKET_HAS_COMPLETED;
-            header.payload_size = pre_mcu_payload_size % sub_mcu_payload_size;
-            printf("remain header.payload_size: %d\n", header.payload_size);
-
-            if (header.payload_size == 0)  {
-                if (sub_mcu_payload_size > pre_mcu_payload_size)
-                    header.payload_size = pre_mcu_payload_size;
-                else
-                    header.payload_size = sub_mcu_payload_size;
+            if ((pre_mcu_payload_size % sub_mcu_payload_size) == 0) {
+                header.payload_size = sub_mcu_payload_size;
+                printf("sub_mcu_payload_size  pre_mcu_payload_size == 0, so payload_size is %d\n", header.payload_size);
+            } else {
+                header.payload_size = pre_mcu_payload_size % sub_mcu_payload_size;
+                printf("sub_mcu_payload_size  pre_mcu_payload_size != 0, so payload_size is %d\n", header.payload_size);
+                printf("remain header.payload_size: %d\n", header.payload_size);
             }
-            printf("remain header.payload_size: %d\n", header.payload_size);
         }
 
+        printf("\n****** packet start ******\n");
         /* process sub header */
         memcpy(tx_buffer_iter, header_iter, sizeof(RF868_CUSTOM_HEADER));
         tx_buffer_iter = tx_buffer_iter + sizeof(RF868_CUSTOM_HEADER);
         printf("sizeof(RF868_CUSTOM_HEADER) is %d\n", sizeof(RF868_CUSTOM_HEADER));
 
         /* process sub payload */
-        memcpy(tx_buffer_iter, pre_mcu_payload_iter, sizeof(header.payload_size));
+        memcpy(tx_buffer_iter, pre_mcu_payload_iter, header.payload_size);
         tx_buffer_iter = tx_buffer_iter + header.payload_size;
         pre_mcu_payload_iter = pre_mcu_payload_iter + header.payload_size;
         printf("header.payload_size is %d\n", header.payload_size);
+        printf("****** packet end ******\n");
 
         /* count */
         header.seq_num++;
@@ -142,9 +149,11 @@ int main(int /*argc*/ , char * /*args*/[])
 
     } while (header.packet_completed_status != PACKET_HAS_COMPLETED);
 
+    printf("\n====== TX finish ======\n");
     printf("to_be_processed_count: %d\n", to_be_processed_count);
     printf("mcu_packet_len: %d\n", mcu_packet_len);
     printf("send count: %d\n", header.seq_num);
+
 
 #if 1
     for (int j = 0; j < mcu_packet_len; j++) {
@@ -196,30 +205,15 @@ int main(int /*argc*/ , char * /*args*/[])
 
     printf("payload_count:%d\n", payload_count);
 
-//    for (int j = 0; j < mcu_packet_len; j++) {
-//        printf("tx_buffer[%d]:%d\n", j, tx_buffer[j]);
-//    }
-
 #if 1
-    RF868_CUSTOM_PAYLOAD *rx_payload = (RF868_CUSTOM_PAYLOAD*) malloc(sizeof(RF868_CUSTOM_PAYLOAD));
-    memcpy(rx_payload, (const void *)payload_buffer, sizeof(RF868_CUSTOM_PAYLOAD)); 
+    if (p_header->hw_type == BUTTON_TYPE) {
+        BUTTON_CTRL *rx_button_iter = (BUTTON_CTRL *)payload_buffer;
 
-    BUTTON_CTRL *rx_button_iter = (BUTTON_CTRL*) malloc(sizeof(BUTTON_CTRL));
-    memcpy(rx_button_iter, (const void *)rx_payload->buf, sizeof(BUTTON_CTRL)); 
-
-    for (int k = 0; k < 12; k++) {
-        printf("rx_button_iter->array[%d]: %d\n", k, rx_button_iter->array[k]);
+        for (int k = 0; k < sizeof(button_ctrl.array)/sizeof(button_ctrl.array[0]); k++) {
+            printf("rx_button_iter->array[%d]: %d\n", k, rx_button_iter->array[k]);
+        }
     }
-
-    free(rx_payload);
-    free(rx_button_iter);
 #endif
-#if 0
-    /* Assgin pointer test */
-    BUTTON_CTRL *p_button_ctrl = (BUTTON_CTRL*) payload.buf;
-    printf("payload.hw_type: %d\n", payload.hw_type); for (int i = 0; i < RF868_MAX_PAYLOAD; i++) { printf("index: %d, value: %d\n", i, p_button_ctrl->array[i]);
-    }
-#endif 
     
 
 //    ret = AHAL_MCU_SendData(AHAL_MCU_ID_RF, 1, (AHAL_VOID *)&hw_ctrl, sizeof(hw_ctrl));
